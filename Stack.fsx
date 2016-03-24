@@ -1,6 +1,6 @@
 ﻿module Stack
 
-#r "packages/SQLProvider/FSharp.Data.SQLProvider.dll"
+#r "SQLProvider/FSharp.Data.SQLProvider.dll"
 //#r "packages/MySql.Data.6.9.8/lib/net45/MySql.Data.dll"
 
 open System
