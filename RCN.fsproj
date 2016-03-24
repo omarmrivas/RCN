@@ -55,6 +55,9 @@
     <Reference Include="System.Xml" />
     <Reference Include="System.Configuration" />
     <Reference Include="System.Data" />
+    <Reference Include="FSharp.Data.SqlProvider">
+      <HintPath>SQLProvider\FSharp.Data.SqlProvider.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
