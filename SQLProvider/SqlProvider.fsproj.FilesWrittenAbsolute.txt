@@ -1,0 +1,5 @@
+/Users/omarmrivas/Downloads/SQLProvider-master/src/SQLProvider/obj/Release/.NETFramework,Version=v4.5.AssemblyAttribute.fs
+/Users/omarmrivas/Downloads/SQLProvider-master/bin/FSharp.Data.SqlProvider.dll.mdb
+/Users/omarmrivas/Downloads/SQLProvider-master/bin/FSharp.Data.SqlProvider.dll
+/Users/omarmrivas/Downloads/SQLProvider-master/src/SQLProvider/obj/Release/FSharp.Data.SqlProvider.dll
+/Users/omarmrivas/Downloads/SQLProvider-master/src/SQLProvider/obj/Release/FSharp.Data.SqlProvider.dll.mdb
