@@ -9,9 +9,11 @@ let initial_state best_so_far =
     let vertices = [(0N, 0N)
                     (1N, 0N)
                     (1N/2N, 1N)]
-    List.fold (fun g v -> match Graph.add_vertex best_so_far g (Graph.P []) v with
-                            | Some g -> g
-                            | None -> g) Graph.empty_graph vertices
+    List.fold (fun g v -> match Graph.add_vertex best_so_far (Graph.P [], g, v, 0) with
+                            Some (vertex, g) -> g
+                          | None -> failwith "Impossible to raise")
+              Graph.empty_graph vertices
+        |> Library.tap (fun g -> printfn "Initial state: %A" g)
 
 let goal n best_so_far (g : Graph.PlanarGraph) =
     if List.length g.vertices = n && g.crossing_number <= best_so_far n
@@ -27,20 +29,24 @@ let succesor best_so_far (g : Graph.PlanarGraph) : (Graph.Vertex * Graph.PlanarG
     Graph.graph_to_gnuplot ("graph" + ((string << List.length) g.vertices)) g
     List.map (fun t -> (center t, Graph.T t)) g.triangles @ List.map (fun p -> (center' p, Graph.P p)) g.non_triangles
         |> Library.tap (fun arr -> printfn "Triangles & non-triangles: %A" (List.length arr))
-        |> List.choose (fun (c,poly) -> 
-                               match Graph.add_vertex best_so_far g poly c with
-                                | Some g -> Some (c, g)
-                                | None -> None)
-        |> Library.tap (fun l -> printfn "Succesors with good crossing number: %A" (List.length l))
-        |> Library.tap (fun l -> l |> List.map (fun (_, g) -> g.crossing_number)
+        |> List.toArray
+        |> Array.Parallel.choose (Graph.crossing_number best_so_far g)
+        |> Array.Parallel.choose (Graph.add_vertex best_so_far)
+        |> Library.tap (fun l -> printfn "Succesors with good crossing number: %A" (Array.length l))
+        |> Library.tap (fun l -> l |> Array.map (fun (_, g) -> g.crossing_number)
                                    |> set
                                    |> printfn "Crossing numbers: %A")
-        |> List.sortBy (fun (_, g) -> g.crossing_number)
+        // Sort w.r.t crossing number and complexity of new vertex
+        |> Array.map (fun (v, g) -> (v,g,(String.length << string) v))
+        |> Array.sortBy (fun (_, g, i) -> (g.crossing_number, i))
+        |> Array.map (fun (v, g, _) -> (v, g))
+        |> Array.toList
 
 [<EntryPoint>]
 let main argv =
     let updated_crossings_data = OswinPage.crossings.Load("http://www.ist.tugraz.at/staff/aichholzer/research/rp/triangulations/crossing/")
     let crossings = OswinPage.min_crossings_so_far updated_crossings_data
+    printfn "Input number: %A" argv.[0]
     let n = int argv.[0]
     printfn "Loading best graph with %A vertices..." n
     printfn "Best graph has %A crossing number" (crossings n)

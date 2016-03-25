@@ -23,7 +23,6 @@ type PlanarGraph =
           lines : line list
           triangles : Triangle list
           non_triangles : Vertex list list
-          quadrilaterals: Quadrilateral list
           crossing_number: int
          }
 
@@ -35,7 +34,6 @@ let empty_graph = {vertices = []
                    lines = []
                    triangles = []
                    non_triangles = []
-                   quadrilaterals = []
                    crossing_number = 0}
 
 let is_collinear ((x, y) : Vertex) ((x1, y1) : Vertex, (x2, y2) : Vertex) =
@@ -105,29 +103,6 @@ let sort_points (l : Vertex list) =
     let (front, back) = List.partition (fun (x,y) -> x >= bx) invalid
     (front @ valid @ back)
 
-(*let less (centerx, centery) (ax, ay) (bx, by) =
-    if ax - centerx >= 0N && bx - centerx < 0N
-    then true
-    else if ax - centerx < 0N && bx - centerx >= 0N
-    then false
-    else if ax - centerx = 0N && bx - centerx = 0N
-    then if ay - centery >= 0N || by - centery >= 0N
-         then ay > by
-         else by > ay
-    else let det = (ax - centerx) * (by - centery) - (bx - centerx) * (ay - centery)
-         if det < 0N
-         then true
-         else if det > 0N
-         then false
-         else let d1 = (ax - centerx) * (ax - centerx) + (ay - centery) * (ay - centery)
-              let d2 = (bx - centerx) * (bx - centerx) + (by - centery) * (by - centery)
-              d1 > d2
-
-let less_i c x y =
-    if less c x y
-    then 1
-    else -1*)
-
 let triangle_crossed (u,v,w) sc lines =
     let inside (u, v) p = 
         let uv = v2d_sub u v
@@ -143,9 +118,6 @@ let triangle_crossed (u,v,w) sc lines =
                          then Some (line, uv)
                          else None
             | None -> None
-(*    let sort_polygon l =
-        let c = center' l
-        List.sortWith (less_i c) l*)
     [(u, v); (u, w); (v, w)]
         |> List.collect (fun p -> List.choose (create p) lines)
         |> (fun l -> if List.isEmpty l
@@ -166,11 +138,10 @@ let triangle_crossed (u,v,w) sc lines =
                                                         | _ -> failwith "Impossible to raise")
                                 |> List.filter (fun (u,v,w) -> not (is_collinear u (v,w)) &&
                                                                not (List.exists (line_crosses_triangle (u,v,w)) lines))
-                                |> List.toArray
                           let codes = triangles
-                                        |> Array.Parallel.map (fun t -> let c = center t
-                                                                        (List.map (Line.find_side c) lines, t))
-                                        |> Array.fold (fun codes (code,t) -> 
+                                        |> List.map (fun t -> let c = center t
+                                                              (List.map (Line.find_side c) lines, t))
+                                        |> List.fold (fun codes (code,t) -> 
                                             match Map.tryFind code codes with
                                                 | Some triangles -> Map.add code (t :: triangles) codes
                                                 | None -> Map.add code [t] codes) Map.empty
@@ -201,12 +172,6 @@ let polygon_crossed (vs : Vertex list) sc lines =
     let c = match sc with
                 | Some c -> c
                 | None -> center' vs
-(*    let sort_polygon c l =
-        List.sortWith (less_i c) l
-    let sort_polygon' l =
-        let c = center' l
-        sort_polygon c l*)
-//    vs  |> sort_polygon c
     vs  |> sort_points
         |> List.pairwise
         |> (fun l -> (List.head vs, List.last vs) :: l)
@@ -229,11 +194,10 @@ let polygon_crossed (vs : Vertex list) sc lines =
                                                         | _ -> failwith "Impossible to raise")
                                 |> List.filter (fun (u,v,w) -> not (is_collinear u (v,w)) &&
                                                                not (List.exists (line_crosses_triangle (u,v,w)) lines))
-                                |> List.toArray
                           let codes = triangles
-                                        |> Array.Parallel.map (fun t -> let c = center t
-                                                                        (List.map (Line.find_side c) lines, t))
-                                        |> Array.fold (fun codes (code,t) -> 
+                                        |> List.map (fun t -> let c = center t
+                                                              (List.map (Line.find_side c) lines, t))
+                                        |> List.fold (fun codes (code,t) -> 
                                             match Map.tryFind code codes with
                                                 | Some triangles -> Map.add code (t :: triangles) codes
                                                 | None -> Map.add code [t] codes) Map.empty
@@ -247,74 +211,43 @@ let polygon_crossed (vs : Vertex list) sc lines =
                                     else (List.head trs :: triangles, non_triangles)) ([], []))
 
 let calculate_triangles triangles polygons lines vertices poly vertex =
-    let new_lines = vertices |> List.toArray
-                             |> Array.Parallel.map (Line.construct_line vertex)
-    let new_lines' = Array.toList new_lines
+    let new_lines =  List.map (Line.construct_line vertex) vertices
     let triangles = match poly with
                         | T t -> List.filter (fun t' -> t <> t') triangles
                         | _ -> triangles
     let polygons = match poly with
                     | P p -> List.filter (fun p' -> p <> p') polygons
                     | _ -> polygons
-    let (triangles', polygons') = 
-        triangles |> List.toArray
-                  |> Array.Parallel.map (fun t -> triangle_crossed t None new_lines')
-                  |> Array.fold (fun (triangles, polygons) (ts, ps) -> (ts @ triangles, ps @ polygons)) ([], [])
-    let (triangles'', polygons'') = 
-        polygons |> List.toArray
-//                 |> Array.map (fun t -> polygon_crossed t None new_lines')
-                 |> Array.Parallel.map (fun t -> polygon_crossed t None new_lines')
-                 |> Array.fold (fun (triangles, polygons) (ts, ps) -> (ts @ triangles, ps @ polygons)) ([], [])
+    let (triangles', polygons') =
+        triangles |> List.map (fun t -> triangle_crossed t None new_lines)
+                  |> List.fold (fun (triangles, polygons) (ts, ps) -> (ts @ triangles, ps @ polygons)) ([], [])
+    let (triangles'', polygons'') =
+        polygons |> List.map (fun t -> polygon_crossed t None new_lines)
+                 |> List.fold (fun (triangles, polygons) (ts, ps) -> (ts @ triangles, ps @ polygons)) ([], [])
     let (triangles''', polygons''') =
         match poly with
-            | T t -> triangle_crossed t (Some vertex) new_lines'
-            | P p -> polygon_crossed p (Some vertex) new_lines'
-    (triangles' @ triangles'' @ triangles''', polygons' @ polygons'' @ polygons''', new_lines' @ lines)
+            | T t -> triangle_crossed t (Some vertex) new_lines
+            | P p -> polygon_crossed p (Some vertex) new_lines
+    (triangles' @ triangles'' @ triangles''', polygons' @ polygons'' @ polygons''', new_lines @ lines)
 
+let crossing_number best_so_far g (vertex, poly) =
+    let size = List.length g.vertices
+    let cn = [0 .. (binomialCoefficient size 3 - 1)]
+                |> List.map ((fun three -> List.sort (vertex :: three)) << (choose g.vertices 3))
+                |> List.map (function | [v1; v2; v3; v4] -> (v1, v2, v3, v4)
+                                      | _ -> failwith "Impossible to raise this exception")
+                |> List.sumBy (fun quad -> if intersect_quadrilateral quad
+                                           then 1
+                                           else 0)
+    if g.crossing_number + cn > best_so_far (size + 1)
+    then None
+    else Some (poly, g, vertex, cn)
 
-(*let calculate_triangles triangles lines vertices v =
-    let new_lines = vertices |> List.toArray
-                             |> Array.Parallel.map (Line.construct_line v)
-    printfn "triangles"
-    let triangles =
-        triangles |> List.toArray
-                  |> Array.Parallel.collect (fun t -> Array.collect (triangle_crossed t) new_lines)
-                  |> Array.Parallel.choose (fun t -> if Array.exists (Line.line_crosses_triangle t) new_lines
-                                                     then None
-                                                     else Some t)
-    printfn "codes"
-    let all_lines = new_lines |> Array.toList
-                              |> List.append lines
-    let codes = triangles
-                    |> Array.Parallel.map (fun t -> let c = center t
-                                                    (List.map (Line.find_side c) all_lines, t))
-                    |> Array.fold (fun codes (code,t) -> 
-                                        match Map.tryFind code codes with
-                                            | Some triangles -> Map.add code (t :: triangles) codes
-                                            | None -> Map.add code [t] codes) Map.empty
-    let (triangles, non_triangles) =
-        codes |> Map.toList
-              |> List.fold (fun (triangles, non_triangles) (_, trs) ->
-                                if List.length trs > 1
-                                then let nt = trs |> List.map (fun (u,v,w) -> [u;v;w])
-                                                  |> List.concat
-                                                  |> (Set.toList << set)
-                                     (triangles, nt :: non_triangles)
-                                else (List.head trs :: triangles, non_triangles)) ([], [])
-    (triangles, non_triangles, all_lines)*)
-
-let add_vertex best_so_far
-               {vertices = vertices;
-                edges = edges; 
-                lines = lines;
-                triangles = triangles;
-                non_triangles = non_triangles;
-                quadrilaterals = quadrilaterals;
-                crossing_number = crossing_number} poly vertex =
+let add_vertex best_so_far (poly, g, vertex, cn) =
     //printfn "%A" vertex
-    if List.exists (is_collinear vertex) edges then None
-    else if List.length vertices < 3 then
-      let vertices = vertex :: vertices
+    if List.exists (is_collinear vertex) g.edges then None
+    else if List.length g.vertices < 3 then
+      let vertices = vertex :: g.vertices
       let size = List.length vertices
       let edges = [0 .. (binomialCoefficient size 2 - 1)]
                     |> List.map (choose vertices 2)
@@ -331,34 +264,17 @@ let add_vertex best_so_far
        edges = edges;
        lines = List.map (fun (u, v) -> Line.construct_line u v) edges;
        triangles = triangles;
-       non_triangles = non_triangles;
-       quadrilaterals = quadrilaterals;
-       crossing_number = crossing_number}
-        |> Some
+       non_triangles = g.non_triangles;
+       crossing_number = g.crossing_number}
+        |> (fun g -> Some (vertex, g))
     else
-      let size = List.length vertices
-      let vertices' = vertex :: vertices
-      let new_quadrilaterals = [0 .. (binomialCoefficient size 3 - 1)]
-                                |> List.map ((fun three -> List.sort (vertex :: three)) << (choose vertices 3))
-                                |> List.map (function
-                                                | [v1; v2; v3; v4] -> (v1, v2, v3, v4)
-                                                | _ -> failwith "Impossible to raise this exception")
-      let crossing_number' = new_quadrilaterals |> List.toArray
-                                                |> Array.Parallel.map
-                                                    (fun quad -> if intersect_quadrilateral quad
-                                                                 then 1
-                                                                 else 0)
-                                                |> Array.sum
-      if crossing_number + crossing_number' > best_so_far (size + 1)
-      then None
-      else
-        let (triangles, non_triangles, lines) = calculate_triangles triangles non_triangles lines vertices poly vertex
-        //printfn "crossing_number'"
-        {vertices = vertices'; edges = List.map (fun v' -> (vertex,v')) vertices @ edges; 
-        triangles = triangles; lines = lines;
-        quadrilaterals = quadrilaterals @ new_quadrilaterals; non_triangles = non_triangles;
-        crossing_number = crossing_number + crossing_number'}
-            |> Some
+      let (triangles, non_triangles, lines) = calculate_triangles g.triangles g.non_triangles g.lines g.vertices poly vertex
+      {vertices = vertex :: g.vertices;
+       edges = List.map (fun v -> (vertex,v)) g.vertices @ g.edges;
+       triangles = triangles; lines = lines;
+       non_triangles = non_triangles;
+       crossing_number = g.crossing_number + cn}
+        |> (fun g -> Some (vertex, g))
 
 let graph_to_gnuplot file (g : PlanarGraph) =
     let vertex_set = set g.vertices
