@@ -20,9 +20,8 @@ let goal n best_so_far (g : Graph.PlanarGraph) =
     then true
     else false
 
-let succesor best_so_far (g : Graph.PlanarGraph) : (Graph.Vertex * Graph.PlanarGraph) list =
-    let options = ParallelOptions()
-    printfn "Configuring degree of parallelism: %A" options.MaxDegreeOfParallelism
+let succesor parallelism best_so_far (g : Graph.PlanarGraph) : (Graph.Vertex * Graph.PlanarGraph) list =
+//    printfn "Configuring degree of parallelism: %A" options.MaxDegreeOfParallelism
     let center ((ux,uy),(vx,vy),(wx,wy)) = ((ux+vx+wx)/3N, (uy+vy+wy)/3N)
     let center' l = l |> List.fold (fun (cx,cy) (vx,vy) -> (cx+vx, cy+vy)) (0N,0N)
                       |> (fun (cx, cy) -> let n = l |> List.length
@@ -31,7 +30,7 @@ let succesor best_so_far (g : Graph.PlanarGraph) : (Graph.Vertex * Graph.PlanarG
     Graph.graph_to_gnuplot ("graph" + ((string << List.length) g.vertices)) g
     List.map (fun t -> (center t, Graph.T t)) g.triangles @ List.map (fun p -> (center' p, Graph.P p)) g.non_triangles
         |> Library.tap (fun arr -> printfn "Triangles & non-triangles: %A" (List.length arr))
-        |> PSeq.withDegreeOfParallelism options.MaxDegreeOfParallelism
+        |> PSeq.withDegreeOfParallelism parallelism
         |> PSeq.choose (Graph.crossing_number best_so_far g)
         |> PSeq.choose (Graph.add_vertex best_so_far)
         |> Library.tap (fun l -> printfn "Succesors with good crossing number: %A" (PSeq.length l))
@@ -48,13 +47,15 @@ let succesor best_so_far (g : Graph.PlanarGraph) : (Graph.Vertex * Graph.PlanarG
 let main argv =
     let updated_crossings_data = OswinPage.crossings.Load("http://www.ist.tugraz.at/staff/aichholzer/research/rp/triangulations/crossing/")
     let crossings = OswinPage.min_crossings_so_far updated_crossings_data
-    printfn "Input number: %A" argv.[0]
+    printfn "Number of vertices: %A" argv.[0]
+    printfn "Degree of parallelism: %A" argv.[1]
     let n = int argv.[0]
+    let parallelism = int argv.[1]
     printfn "Loading best graph with %A vertices..." n
     printfn "Best graph has %A crossing number" (crossings n)
     printfn "Starting DFS..."
     let stopWatch = System.Diagnostics.Stopwatch.StartNew()
-    let r = Search.blp_rep (initial_state crossings) (goal n crossings) (succesor crossings) (uint32 n - 3u)
+    let r = Search.blp_rep (initial_state crossings) (goal n crossings) (succesor parallelism crossings) (uint32 n - 3u)
     stopWatch.Stop()
     printfn "%A" r
     printfn "%f" stopWatch.Elapsed.TotalMilliseconds
