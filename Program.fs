@@ -27,7 +27,7 @@ let succesor parallelism best_so_far (g : Graph.PlanarGraph) : (Graph.Vertex * G
                       |> (fun (cx, cy) -> let n = l |> List.length
                                                     |> BigRational.FromInt
                                           (cx / n, cy / n))
-    Graph.graph_to_gnuplot ("graph" + ((string << List.length) g.vertices)) g
+    Gnuplot.graph_to_gnuplot ("graph" + ((string << List.length) g.vertices)) g
     List.map (fun t -> (center t, Graph.T t)) g.triangles @ List.map (fun p -> (center' p, Graph.P p)) g.non_triangles
         |> Library.tap (fun arr -> printfn "Triangles & non-triangles: %A" (List.length arr))
         |> PSeq.withDegreeOfParallelism parallelism
@@ -45,19 +45,27 @@ let succesor parallelism best_so_far (g : Graph.PlanarGraph) : (Graph.Vertex * G
 
 [<EntryPoint>]
 let main argv =
-    let updated_crossings_data = OswinPage.crossings.Load("http://www.ist.tugraz.at/staff/aichholzer/research/rp/triangulations/crossing/")
-    let crossings = OswinPage.min_crossings_so_far updated_crossings_data
-    printfn "Number of vertices: %A" argv.[0]
-    printfn "Degree of parallelism: %A" argv.[1]
-    let n = int argv.[0]
-    let parallelism = int argv.[1]
-    printfn "Loading best graph with %A vertices..." n
-    printfn "Best graph has %A crossing number" (crossings n)
-    printfn "Starting DFS..."
-    let stopWatch = System.Diagnostics.Stopwatch.StartNew()
-    let r = Search.blp_rep (initial_state crossings) (goal n crossings) (succesor parallelism crossings) (uint32 n - 3u)
-    stopWatch.Stop()
-    printfn "%A" r
-    printfn "%f" stopWatch.Elapsed.TotalMilliseconds
+    if argv.[0] = "-find"
+    then let updated_crossings_data = OswinPage.crossings.Load("http://www.ist.tugraz.at/staff/aichholzer/research/rp/triangulations/crossing/")
+         let crossings = OswinPage.min_crossings_so_far updated_crossings_data
+         printfn "Number of vertices: %A" argv.[0]
+         printfn "Degree of parallelism: %A" argv.[1]
+         let n = int argv.[1]
+         let parallelism = int argv.[2]
+         printfn "Loading best graph with %A vertices..." n
+         printfn "Best graph has %A crossing number" (crossings n)
+         printfn "Starting DFS..."
+         let stopWatch = System.Diagnostics.Stopwatch.StartNew()
+         let r = Search.blp_rep (initial_state crossings) (goal n crossings) (succesor parallelism crossings) (uint32 n - 3u)
+         stopWatch.Stop()
+         printfn "%A" r
+         printfn "%f" stopWatch.Elapsed.TotalMilliseconds
+    else if argv.[0] = "-print"
+    then let n = int argv.[1]
+         Gnuplot.graph_to_gnuplot' false ("graph" + string n) (uint32 n)
+    else if argv.[0] = "-animation"
+    then let n = int argv.[1]
+         Gnuplot.graph_to_animation "graph" n
+    else ()
     0 // return an integer exit code
 

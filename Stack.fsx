@@ -75,6 +75,16 @@ let get_best n =
             |> Library.deserialize<Vertex list>
             |> Some
 
+let get_best' n =
+    let bests = query {for e in ctxt.Rcn.Graphs do
+                       where (e.Vertices = n)
+                       select e}
+    if Seq.isEmpty bests
+    then None
+    else (Seq.head bests).Graph
+            |> Library.deserialize<PlanarGraph>
+            |> Some
+
 let update_best (_, (g : PlanarGraph), (solution : Vertex list)) =
     let n = uint32 (List.length g.vertices)
     let bests = query {for e in ctxt.Rcn.Graphs do
