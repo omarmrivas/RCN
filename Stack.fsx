@@ -52,8 +52,12 @@ let array_to_string (data : byte []) =
 
 let push ((depth : uint32), (g : PlanarGraph), (solution : Vertex list)) =
     connection.Open()
+    let triangles = List.sumBy (fun l -> if List.length l = 3
+                                         then 1
+                                         else 0) g.polygons
+    let polygons = List.length g.polygons - triangles
     let commandTxt = sprintf "INSERT INTO `Stack`(`depth`, `vertices`, `graph`, `solution`, `triangles`, `polygons`, `crossings`) VALUES (%d,%d,?graph,?solution,%d,%d,%d)"
-                             depth (List.length g.vertices) (List.length g.triangles) (List.length g.non_triangles) g.crossing_number
+                             depth (List.length g.vertices) triangles polygons g.crossing_number
     let command = new MySqlCommand(commandTxt, connection)
     let s_graph = Library.serialize g
     let s_solution = Library.serialize solution
@@ -96,8 +100,12 @@ let update_best (succesors : Graph.Vertex list list) ((g : PlanarGraph), (soluti
     if List.isEmpty bests || uint32 g.crossing_number <= (List.head bests).Crossings
     then printfn "updating best"
          connection.Open()
+         let triangles = List.sumBy (fun l -> if List.length l = 3
+                                              then 1
+                                              else 0) g.polygons
+         let polygons = List.length g.polygons - triangles
          let commandTxt = sprintf "INSERT INTO `Graphs`(`vertices`, `graph`, `solution`, `succesors`, `triangles`, `polygons`, `crossings`) VALUES (%d,?graph,?solution,?succesors,%d,%d,%d)"
-                                  (List.length g.vertices) (List.length g.triangles) (List.length g.non_triangles) g.crossing_number
+                                  (List.length g.vertices) triangles polygons g.crossing_number
          let command = new MySqlCommand(commandTxt, connection)
          let s_graph = Library.serialize g
          let s_solution = Library.serialize solution

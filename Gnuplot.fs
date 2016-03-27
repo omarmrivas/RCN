@@ -18,9 +18,7 @@ let execute_command command args =
 let graph_to_gnuplot file (g : PlanarGraph) =
     let vertex_set = set g.vertices
     let all_vertices = 
-        g.triangles
-            |> List.map (fun (u,v,w) -> [u;v;w])
-            |> List.append g.non_triangles
+        g.polygons
             |> List.concat
             |> (Set.toList << set)
             |> List.partition (fun v -> Set.contains v vertex_set)
@@ -38,9 +36,6 @@ let graph_to_gnuplot file (g : PlanarGraph) =
                                           (cx / n, cy / n))
     let coord = string << BigRational.ToDouble
     let vertex ((x,y) : Vertex) = coord x + ", " + coord y
-    let triangle ((u,v,w) : Triangle) = let c = center (u,v,w)
-                                        let l = "(" + aux1 u + "," + aux1 v + "," + aux1 w + ")"
-                                        "set label at " + vertex c + " \"" + l + "\""
     let non_triangle (l : Vertex list) = let c = center' l
                                          let x = l |> List.map aux1
                                                    |> String.concat ","
@@ -75,8 +70,7 @@ let graph_to_gnuplot file (g : PlanarGraph) =
         g.lines
             |> List.partition is_regular
             |> Library.pairself (List.map lines)
-    let triangles = List.map triangle g.triangles
-    let non_triangles = List.map non_triangle g.non_triangles
+    let polygons = List.map non_triangle g.polygons
     let separated1 = vertices @ regular 
                         |> String.concat ",\\\n"
     let separated2 = if List.isEmpty irregular
@@ -87,8 +81,7 @@ let graph_to_gnuplot file (g : PlanarGraph) =
                         |> String.concat ",\\\n"
     let outFile = new StreamWriter(file + ".gnuplot")
     List.iter (fun (l : string) -> outFile.WriteLine l) header
-    List.iter (fun (l : string) -> outFile.WriteLine l) triangles
-    List.iter (fun (l : string) -> outFile.WriteLine l) non_triangles
+    List.iter (fun (l : string) -> outFile.WriteLine l) polygons
     outFile.WriteLine separated1
     outFile.WriteLine "set parametric"
     outFile.WriteLine separated2
@@ -112,9 +105,7 @@ let graph_to_gnuplot' debug file n =
   | Some (g, succ) ->
     let vertex_set = set g.vertices
     let all_vertices = 
-        g.triangles
-            |> List.map (fun (u,v,w) -> [u;v;w])
-            |> List.append g.non_triangles
+        g.polygons
             |> List.concat
             |> (Set.toList << set)
             |> List.partition (fun v -> Set.contains v vertex_set)
@@ -180,11 +171,10 @@ let graph_to_gnuplot' debug file n =
             |> Library.pairself (List.map lines)
     let polygons = List.map polygon_to succ
     let vertices' = List.map circle_to g.vertices
-    let (triangles, non_triangles) =
+    let polygons =
         if debug
-        then (List.map triangle g.triangles,
-              List.map non_triangle g.non_triangles)
-        else ([], [])
+        then List.map non_triangle g.polygons
+        else []
     let separated1 = vertices @ regular
                         |> String.concat ",\\\n"
     let separated2 = if List.isEmpty irregular
@@ -198,8 +188,7 @@ let graph_to_gnuplot' debug file n =
     List.iter (fun (l : string) -> outFile.WriteLine l) polygons
     List.iter (fun (l : string) -> outFile.WriteLine l) vertices'
     if debug
-    then List.iter (fun (l : string) -> outFile.WriteLine l) triangles
-         List.iter (fun (l : string) -> outFile.WriteLine l) non_triangles
+    then List.iter (fun (l : string) -> outFile.WriteLine l) polygons
     else ()
     outFile.WriteLine separated1
     outFile.WriteLine "set parametric"
@@ -211,6 +200,6 @@ let graph_to_gnuplot' debug file n =
 
 let graph_to_animation file n =
 //    execute_command "rm" (file + "*.*")
-    List.iter (fun n -> graph_to_gnuplot' false (file + (sprintf "%02d" n)) (uint32 n)) [4..n]
+    List.iter (fun n -> graph_to_gnuplot' false (file + (sprintf "%02d" n)) (uint32 n)) [3..n]
     execute_command "convert" ("-size 500x500 -density 500 -quality 100 -set delay 100 -colorspace GRAY -colors 256 -dispose 2 -loop 0 -scale 300% *.eps " + file + ".gif")
       

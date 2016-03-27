@@ -13,6 +13,7 @@ type Vertex = BigRational * BigRational
 type Edge = Vertex * Vertex
 type Triangle = Vertex * Vertex * Vertex
 type Quadrilateral = Vertex * Vertex * Vertex * Vertex
+type Polygon = Vertex list
 
 exception INVALID_GRAPH of Vertex
 
@@ -21,20 +22,19 @@ type PlanarGraph =
          {vertices: Vertex list
           edges : Edge list
           lines : line list
-          triangles : Triangle list
-          non_triangles : Vertex list list
+          polygons : Polygon list
           crossing_number: int
          }
-
-type polygon = T of Triangle
-             | P of Vertex list
 
 let empty_graph = {vertices = []
                    edges = []
                    lines = []
-                   triangles = []
-                   non_triangles = []
+                   polygons = []
                    crossing_number = 0}
+
+let polygon_to_triangle = function
+    | [u; v; w] -> (u, v, w)
+    | _ -> failwith "Not a triangle"
 
 let is_collinear ((x, y) : Vertex) ((x1, y1) : Vertex, (x2, y2) : Vertex) =
     let numerator = y2 - y1
@@ -103,58 +103,7 @@ let sort_points (l : Vertex list) =
     let (front, back) = List.partition (fun (x,y) -> x >= bx) invalid
     (front @ valid @ back)
 
-let triangle_crossed (u,v,w) sc lines =
-    let inside (u, v) p = 
-        let uv = v2d_sub u v
-        let d = v2d_dot uv uv
-        if d = 0N
-        then printfn "Invalid triangle! %A" (u,v,w)
-             false
-        else let alpha = (v2d_dot (v2d_sub p v) uv) / d
-             alpha > 0N && alpha < 1N
-    let create (u, v) line =
-        match crossing_point (line, construct_line u v) with
-            | Some uv -> if inside (u, v) uv
-                         then Some (line, uv)
-                         else None
-            | None -> None
-    [(u, v); (u, w); (v, w)]
-        |> List.collect (fun p -> List.choose (create p) lines)
-        |> (fun l -> if List.isEmpty l
-                     then ([(u,v,w)], [])
-                     else let vs = List.map snd l @ [u; v; w]
-                                    |> (Set.toList << set)
-                          let vs = match sc with
-                                    | Some c -> c :: vs
-                                    | None -> vs
-                          let lines = List.map fst l
-                          let size = List.length vs
-                          let n = Library.binomialCoefficient size 3 - 1
-                          let triangles = 
-                            [0 .. n]
-                                |> List.map (List.sort << (Library.choose vs 3))
-                                |> List.map (fun t -> match t with
-                                                        | [u;v;w] -> (u,v,w)
-                                                        | _ -> failwith "Impossible to raise")
-                                |> List.filter (fun (u,v,w) -> not (is_collinear u (v,w)) &&
-                                                               not (List.exists (line_crosses_triangle (u,v,w)) lines))
-                          let codes = triangles
-                                        |> List.map (fun t -> let c = center t
-                                                              (List.map (Line.find_side c) lines, t))
-                                        |> List.fold (fun codes (code,t) -> 
-                                            match Map.tryFind code codes with
-                                                | Some triangles -> Map.add code (t :: triangles) codes
-                                                | None -> Map.add code [t] codes) Map.empty
-                          codes |> Map.toList
-                                |> List.fold (fun (triangles, non_triangles) (_, trs) ->
-                                    if List.length trs > 1
-                                    then let nt = trs |> List.map (fun (u,v,w) -> [u;v;w])
-                                                      |> List.concat
-                                                      |> (sort_points << Set.toList << set)
-                                         (triangles, nt :: non_triangles)
-                                    else (List.head trs :: triangles, non_triangles)) ([], []))
-
-let polygon_crossed (vs : Vertex list) sc lines =
+let polygon_crossed (vs : Vertex list) sc lines : Polygon list =
     let inside (u, v) p = 
         let uv = v2d_sub u v
         let d = v2d_dot uv uv
@@ -177,7 +126,7 @@ let polygon_crossed (vs : Vertex list) sc lines =
         |> (fun l -> (List.head vs, List.last vs) :: l)
         |> List.collect (fun p -> List.choose (create p) lines)
         |> (fun l -> if List.isEmpty l
-                     then ([], [vs])
+                     then [vs]
                      else let vs = List.map snd l @ vs
                                      |> (Set.toList << set)
                           let vs = match sc with
@@ -202,33 +151,20 @@ let polygon_crossed (vs : Vertex list) sc lines =
                                                 | Some triangles -> Map.add code (t :: triangles) codes
                                                 | None -> Map.add code [t] codes) Map.empty
                           codes |> Map.toList
-                                |> List.fold (fun (triangles, non_triangles) (_, trs) ->
-                                    if List.length trs > 1
-                                    then let nt = trs |> List.map (fun (u,v,w) -> [u;v;w])
-                                                      |> List.concat
-                                                      |> (sort_points << Set.toList << set)
-                                         (triangles, nt :: non_triangles)
-                                    else (List.head trs :: triangles, non_triangles)) ([], []))
+                                |> List.fold (fun polygons (_, trs) ->
+                                    let nt = trs |> List.map (fun (u,v,w) -> [u;v;w])
+                                                 |> List.concat
+                                                 |> (sort_points << Set.toList << set)
+                                    nt :: polygons) [])
 
-let calculate_triangles triangles polygons lines vertices poly vertex =
+let calculate_triangles polygons lines vertices poly vertex =
     let new_lines =  List.map (Line.construct_line vertex) vertices
-    let triangles = match poly with
-                        | T t -> List.filter (fun t' -> t <> t') triangles
-                        | _ -> triangles
-    let polygons = match poly with
-                    | P p -> List.filter (fun p' -> p <> p') polygons
-                    | _ -> polygons
-    let (triangles', polygons') =
-        triangles |> List.map (fun t -> triangle_crossed t None new_lines)
-                  |> List.fold (fun (triangles, polygons) (ts, ps) -> (ts @ triangles, ps @ polygons)) ([], [])
-    let (triangles'', polygons'') =
+    let polygons = List.filter (fun p' -> poly <> p') polygons
+    let polygons' =
         polygons |> List.map (fun t -> polygon_crossed t None new_lines)
-                 |> List.fold (fun (triangles, polygons) (ts, ps) -> (ts @ triangles, ps @ polygons)) ([], [])
-    let (triangles''', polygons''') =
-        match poly with
-            | T t -> triangle_crossed t (Some vertex) new_lines
-            | P p -> polygon_crossed p (Some vertex) new_lines
-    (triangles' @ triangles'' @ triangles''', polygons' @ polygons'' @ polygons''', new_lines @ lines)
+                 |> List.fold (fun polygons ps -> ps @ polygons) []
+    let polygons'' = polygon_crossed poly (Some vertex) new_lines
+    (polygons' @ polygons'', new_lines @ lines)
 
 let crossing_number best_so_far g (vertex, poly) =
     let size = List.length g.vertices
@@ -246,6 +182,7 @@ let crossing_number best_so_far g (vertex, poly) =
 let add_vertex best_so_far (poly, g, vertex, cn) =
     //printfn "%A" vertex
     if List.exists (is_collinear vertex) g.edges then None
+    // base case
     else if List.length g.vertices < 3 then
       let vertices = vertex :: g.vertices
       let size = List.length vertices
@@ -263,15 +200,14 @@ let add_vertex best_so_far (poly, g, vertex, cn) =
       {vertices = vertices;
        edges = edges;
        lines = List.map (fun (u, v) -> Line.construct_line u v) edges;
-       triangles = triangles;
-       non_triangles = g.non_triangles;
+       polygons = g.polygons;
        crossing_number = g.crossing_number}
         |> (fun g -> Some (poly, vertex, g))
+    // non-base case
     else
-      let (triangles, non_triangles, lines) = calculate_triangles g.triangles g.non_triangles g.lines g.vertices poly vertex
+      let (polygons, lines) = calculate_triangles g.polygons g.lines g.vertices poly vertex
       {vertices = vertex :: g.vertices;
        edges = List.map (fun v -> (vertex,v)) g.vertices @ g.edges;
-       triangles = triangles; lines = lines;
-       non_triangles = non_triangles;
+       polygons = polygons; lines = lines;
        crossing_number = g.crossing_number + cn}
         |> (fun g -> Some (poly, vertex, g))

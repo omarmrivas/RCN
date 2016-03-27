@@ -10,7 +10,7 @@ let initial_state best_so_far =
     let vertices = [(0N, 0N)
                     (1N, 0N)
                     (1N/2N, 1N)]
-    List.fold (fun g v -> match Graph.add_vertex best_so_far (Graph.P [], g, v, 0) with
+    List.fold (fun g v -> match Graph.add_vertex best_so_far ([], g, v, 0) with
                             Some (_, vertex, g) -> g
                           | None -> failwith "Impossible to raise")
               Graph.empty_graph vertices
@@ -38,14 +38,11 @@ let select_wing (g : Graph.PlanarGraph) (c, _) =
     else Graph.point_in_triangle c triangles.[(n-4) % 3]
     
 let succesor parallelism best_so_far (g : Graph.PlanarGraph) : (Graph.Vertex * Graph.PlanarGraph) list =
-//    printfn "Configuring degree of parallelism: %A" options.MaxDegreeOfParallelism
-    let center ((ux,uy),(vx,vy),(wx,wy)) = ((ux+vx+wx)/3N, (uy+vy+wy)/3N)
-    let center' l = l |> List.fold (fun (cx,cy) (vx,vy) -> (cx+vx, cy+vy)) (0N,0N)
-                      |> (fun (cx, cy) -> let n = l |> List.length
-                                                    |> BigRational.FromInt
-                                          (cx / n, cy / n))
-//    Gnuplot.graph_to_gnuplot ("graph" + ((string << List.length) g.vertices)) g
-    List.map (fun t -> (center t, Graph.T t)) g.triangles @ List.map (fun p -> (center' p, Graph.P p)) g.non_triangles
+    let center l = l |> List.fold (fun (cx,cy) (vx,vy) -> (cx+vx, cy+vy)) (0N,0N)
+                     |> (fun (cx, cy) -> let n = l |> List.length
+                                                   |> BigRational.FromInt
+                                         (cx / n, cy / n))
+    List.map (fun t -> (center t, t)) g.polygons
         |> Library.tap (fun arr -> printfn "Triangles & non-triangles: %A" (List.length arr))
         |> PSeq.withDegreeOfParallelism parallelism
         |> PSeq.filter (select_wing g)
@@ -60,10 +57,7 @@ let succesor parallelism best_so_far (g : Graph.PlanarGraph) : (Graph.Vertex * G
         |> List.map (fun (poly, v, g) -> (poly,v,g,(String.length << string) v))
         |> List.sortBy (fun (_, _, g, i) -> (g.crossing_number, i))
         |> List.map (fun (poly, v, g, _) -> (poly, v, g))
-        |> Library.tap (fun l -> let polygons = l |> List.map (fun (poly, _, _) -> 
-                                                                match poly with
-                                                                    | Graph.T (u,v,w) -> [u;v;w]
-                                                                    | Graph.P l -> l)
+        |> Library.tap (fun l -> let polygons = List.map (fun (poly, _, _) -> poly) l
                                  printfn "Changing DB..."
                                  Stack.update_best polygons (g, g.vertices)
                                  if List.isEmpty l
@@ -77,8 +71,8 @@ let main argv =
     if argv.[0] = "-find"
     then let updated_crossings_data = OswinPage.crossings.Load("http://www.ist.tugraz.at/staff/aichholzer/research/rp/triangulations/crossing/")
          let crossings = OswinPage.min_crossings_so_far updated_crossings_data
-         printfn "Number of vertices: %A" argv.[0]
-         printfn "Degree of parallelism: %A" argv.[1]
+         printfn "Number of vertices: %A" argv.[1]
+         printfn "Degree of parallelism: %A" argv.[2]
          let n = int argv.[1]
          let parallelism = int argv.[2]
          printfn "Loading best graph with %A vertices..." n
