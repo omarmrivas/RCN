@@ -11,6 +11,7 @@ open MySql
 open MySql.Data
 open MySql.Data.MySqlClient
 open Graph
+open Library
 
 [<Literal>]
 let resPath     = @"packages/MySql.Data.6.9.8/lib/net45"
@@ -81,30 +82,35 @@ let get_best' n =
                        select e}
     if Seq.isEmpty bests
     then None
-    else (Seq.head bests).Graph
-            |> Library.deserialize<PlanarGraph>
-            |> Some
+    else let best = Seq.head bests
+         let g = Library.deserialize<PlanarGraph> best.Graph
+         let succ = Library.deserialize<Graph.Vertex list list> best.Succesors
+         Some (g, succ)
 
-let update_best (_, (g : PlanarGraph), (solution : Vertex list)) =
+let update_best (succesors : Graph.Vertex list list) ((g : PlanarGraph), (solution : Vertex list)) =
     let n = uint32 (List.length g.vertices)
     let bests = query {for e in ctxt.Rcn.Graphs do
                        where (e.Vertices = n)
                        select e}
                        |> Seq.toList
-    if List.isEmpty bests || uint32 g.crossing_number < (List.head bests).Crossings
+    if List.isEmpty bests || uint32 g.crossing_number <= (List.head bests).Crossings
     then printfn "updating best"
          connection.Open()
-         let commandTxt = sprintf "INSERT INTO `Graphs`(`vertices`, `graph`, `solution`, `triangles`, `polygons`, `crossings`) VALUES (%d,?graph,?solution,%d,%d,%d)"
+         let commandTxt = sprintf "INSERT INTO `Graphs`(`vertices`, `graph`, `solution`, `succesors`, `triangles`, `polygons`, `crossings`) VALUES (%d,?graph,?solution,?succesors,%d,%d,%d)"
                                   (List.length g.vertices) (List.length g.triangles) (List.length g.non_triangles) g.crossing_number
          let command = new MySqlCommand(commandTxt, connection)
          let s_graph = Library.serialize g
          let s_solution = Library.serialize solution
+         let s_succesors = Library.serialize succesors
          let p_graph = new MySqlParameter("?graph", MySqlDbType.LongBlob, Array.length s_graph)
          let p_solution = new MySqlParameter("?solution", MySqlDbType.MediumBlob, Array.length s_solution)
+         let p_succesors = new MySqlParameter("?succesors", MySqlDbType.MediumBlob, Array.length s_succesors)
          p_graph.Value <- s_graph
          p_solution.Value <- s_solution
+         p_succesors.Value <- s_succesors
          ignore (command.Parameters.Add p_graph)
          ignore (command.Parameters.Add p_solution)
+         ignore (command.Parameters.Add p_succesors)
          ignore (command.ExecuteNonQuery())
          connection.Close()
          // delete previous best

@@ -266,7 +266,7 @@ let add_vertex best_so_far (poly, g, vertex, cn) =
        triangles = triangles;
        non_triangles = g.non_triangles;
        crossing_number = g.crossing_number}
-        |> (fun g -> Some (vertex, g))
+        |> (fun g -> Some (poly, vertex, g))
     else
       let (triangles, non_triangles, lines) = calculate_triangles g.triangles g.non_triangles g.lines g.vertices poly vertex
       {vertices = vertex :: g.vertices;
@@ -274,4 +274,4 @@ let add_vertex best_so_far (poly, g, vertex, cn) =
        triangles = triangles; lines = lines;
        non_triangles = non_triangles;
        crossing_number = g.crossing_number + cn}
-        |> (fun g -> Some (vertex, g))
+        |> (fun g -> Some (poly, vertex, g))

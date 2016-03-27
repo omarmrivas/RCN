@@ -96,9 +96,20 @@ let graph_to_gnuplot file (g : PlanarGraph) =
     outFile.Close()
     ()
 
+(*
+set angle degrees
+
+# use 'square' aspect ratio else calculated angles don't match display angles
+set size square
+
+# draw a 3,4,5 right triangle as a polygon - f[ill]s[tyle] empty border 1 (red)
+set object 1 poly from 1,1 to 1,4 to 5,1 to 1,1 fc rgb "grey" fs solid border 1
+
+*)
+
 let graph_to_gnuplot' debug file n =
   match Stack.get_best' n with
-  | Some g ->
+  | Some (g, succ) ->
     let vertex_set = set g.vertices
     let all_vertices = 
         g.triangles
@@ -109,7 +120,7 @@ let graph_to_gnuplot' debug file n =
             |> List.partition (fun v -> Set.contains v vertex_set)
             |> (fun (x,y) -> if debug
                              then x @ y
-                             else x)
+                             else List.rev g.vertices)
     let mvertex = all_vertices
                     |> List.mapi (fun i x -> (i+1, x))
                     |> List.fold (fun m (i,v) -> Map.add v i m) Map.empty
@@ -141,6 +152,13 @@ let graph_to_gnuplot' debug file n =
         if Set.contains v vertex_set
         then "'black'"
         else "'red'"
+    // set object 1 poly from 1,1 to 1,4 to 5,1 to 1,1 fc rgb "grey" fs solid border 1
+    let polygon_to l = let coords = List.map (fun (ux,uy) -> coord ux + "," + coord uy) l
+                       let coords = coords @ [List.head coords]
+                       "set object poly from " + String.concat " to " coords + " back fc rgb \"grey\" fs solid border 1"
+    let circle_to (ux,uy) = 
+        "set object circle at " + coord ux + "," + coord uy + " front size 0.01 fc rgb 'black' fs solid 1"
+
     let vertex_lbl (v : Vertex) =
           "     '+' using ($0 == 0 ? " + (coord << fst) v + " : NaN):(" + (coord << snd) v + "):('" + aux1 v + "') with labels offset char 1,-0.2 left textcolor rgb " + rgb v + " point linestyle 1 notitle"
     let header =["set terminal postscript eps enhanced color font 'Helvetica,10'"
@@ -160,12 +178,14 @@ let graph_to_gnuplot' debug file n =
         g.lines
             |> List.partition is_regular
             |> Library.pairself (List.map lines)
+    let polygons = List.map polygon_to succ
+    let vertices' = List.map circle_to g.vertices
     let (triangles, non_triangles) =
         if debug
         then (List.map triangle g.triangles,
               List.map non_triangle g.non_triangles)
         else ([], [])
-    let separated1 = vertices @ regular 
+    let separated1 = vertices @ regular
                         |> String.concat ",\\\n"
     let separated2 = if List.isEmpty irregular
                      then ""
@@ -175,6 +195,8 @@ let graph_to_gnuplot' debug file n =
                         |> String.concat ",\\\n"
     let outFile = new StreamWriter(file + ".gnuplot")
     List.iter (fun (l : string) -> outFile.WriteLine l) header
+    List.iter (fun (l : string) -> outFile.WriteLine l) polygons
+    List.iter (fun (l : string) -> outFile.WriteLine l) vertices'
     if debug
     then List.iter (fun (l : string) -> outFile.WriteLine l) triangles
          List.iter (fun (l : string) -> outFile.WriteLine l) non_triangles
@@ -188,7 +210,7 @@ let graph_to_gnuplot' debug file n =
   | None -> printfn "No such graph"
 
 let graph_to_animation file n =
-    execute_command "rm" (file + "*.*")
+//    execute_command "rm" (file + "*.*")
     List.iter (fun n -> graph_to_gnuplot' false (file + (sprintf "%02d" n)) (uint32 n)) [4..n]
-    execute_command "convert" ("-size 500x500 -density 500 -quality 100 -set delay 100 -colorspace GRAY -colors 256 -dispose 1 -loop 0 -scale 300% *.eps " + file + ".gif")
+    execute_command "convert" ("-size 500x500 -density 500 -quality 100 -set delay 100 -colorspace GRAY -colors 256 -dispose 2 -loop 0 -scale 300% *.eps " + file + ".gif")
       

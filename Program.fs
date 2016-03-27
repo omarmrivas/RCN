@@ -11,7 +11,7 @@ let initial_state best_so_far =
                     (1N, 0N)
                     (1N/2N, 1N)]
     List.fold (fun g v -> match Graph.add_vertex best_so_far (Graph.P [], g, v, 0) with
-                            Some (vertex, g) -> g
+                            Some (_, vertex, g) -> g
                           | None -> failwith "Impossible to raise")
               Graph.empty_graph vertices
 
@@ -20,6 +20,23 @@ let goal n best_so_far (g : Graph.PlanarGraph) =
     then true
     else false
 
+let v1 = (0N, 0N)
+let v2 = (1N, 0N)
+let v3 = (1N/2N, 1N)
+let c = (1N/2N, 1N/3N)
+let bottom = Option.get (Line.crossing_point (Line.construct_line v1 v2, Line.construct_line v3 c))
+let t1 = (v1, c, bottom)
+let t2 = (v3, c, Option.get (Line.crossing_point (Line.construct_line v1 v3, Line.construct_line v2 c)))
+let t3 = (v2, c, bottom)
+let triangles = [|t1; t3; t2|]
+
+// Select only one wing
+let select_wing (g : Graph.PlanarGraph) (c, _) =
+    let n = List.length g.vertices
+    if n <= 3
+    then true
+    else Graph.point_in_triangle c triangles.[(n-4) % 3]
+    
 let succesor parallelism best_so_far (g : Graph.PlanarGraph) : (Graph.Vertex * Graph.PlanarGraph) list =
 //    printfn "Configuring degree of parallelism: %A" options.MaxDegreeOfParallelism
     let center ((ux,uy),(vx,vy),(wx,wy)) = ((ux+vx+wx)/3N, (uy+vy+wy)/3N)
@@ -27,21 +44,33 @@ let succesor parallelism best_so_far (g : Graph.PlanarGraph) : (Graph.Vertex * G
                       |> (fun (cx, cy) -> let n = l |> List.length
                                                     |> BigRational.FromInt
                                           (cx / n, cy / n))
-    Gnuplot.graph_to_gnuplot ("graph" + ((string << List.length) g.vertices)) g
+//    Gnuplot.graph_to_gnuplot ("graph" + ((string << List.length) g.vertices)) g
     List.map (fun t -> (center t, Graph.T t)) g.triangles @ List.map (fun p -> (center' p, Graph.P p)) g.non_triangles
         |> Library.tap (fun arr -> printfn "Triangles & non-triangles: %A" (List.length arr))
         |> PSeq.withDegreeOfParallelism parallelism
+        |> PSeq.filter (select_wing g)
         |> PSeq.choose (Graph.crossing_number best_so_far g)
         |> PSeq.choose (Graph.add_vertex best_so_far)
-        |> Library.tap (fun l -> printfn "Succesors with good crossing number: %A" (PSeq.length l))
-        |> Library.tap (fun l -> l |> PSeq.map (fun (_, g) -> g.crossing_number)
+        |> PSeq.toList
+        |> Library.tap (fun l -> printfn "Succesors with good crossing number: %A" (List.length l))
+        |> Library.tap (fun l -> l |> List.map (fun (_, _, g) -> g.crossing_number)
                                    |> set
                                    |> printfn "Crossing numbers: %A")
         // Sort w.r.t crossing number and complexity of new vertex
-        |> PSeq.map (fun (v, g) -> (v,g,(String.length << string) v))
-        |> PSeq.sortBy (fun (_, g, i) -> (g.crossing_number, i))
-        |> PSeq.map (fun (v, g, _) -> (v, g))
-        |> PSeq.toList
+        |> List.map (fun (poly, v, g) -> (poly,v,g,(String.length << string) v))
+        |> List.sortBy (fun (_, _, g, i) -> (g.crossing_number, i))
+        |> List.map (fun (poly, v, g, _) -> (poly, v, g))
+        |> Library.tap (fun l -> let polygons = l |> List.map (fun (poly, _, _) -> 
+                                                                match poly with
+                                                                    | Graph.T (u,v,w) -> [u;v;w]
+                                                                    | Graph.P l -> l)
+                                 printfn "Changing DB..."
+                                 Stack.update_best polygons (g, g.vertices)
+                                 if List.isEmpty l
+                                 then ()
+                                 else let (_, _, g) = List.head l
+                                      Stack.update_best ([] : Graph.Vertex list list) (g, g.vertices))
+        |> List.map (fun (_, v, g) -> (v, g))
 
 [<EntryPoint>]
 let main argv =

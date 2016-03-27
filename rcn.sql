@@ -59,6 +59,7 @@ CREATE TABLE `Graphs` (
   `vertices` int(11) NOT NULL,
   `graph` longblob NOT NULL,
   `solution` mediumblob NOT NULL,
+  `succesors` mediumblob NOT NULL,
   `triangles` int(11) NOT NULL,
   `polygons` int(11) NOT NULL,
   `crossings` int(11) NOT NULL

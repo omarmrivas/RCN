@@ -16,10 +16,6 @@ let blp_rep inicio meta sucesores m =
                 else if h < m
                      then state |> sucesores
                                 |> List.map (fun (a, st) -> (h + 1u, st, a :: sol))
-                                |> Library.tap (fun ns -> printfn "Changing DB..."
-                                                          if List.isEmpty ns
-                                                          then ()
-                                                          else Stack.update_best (List.head ns))
                                 |> List.rev
                                 |> (fun ns -> Stack.delete id
                                               List.iter (fun n -> Stack.push n) ns
