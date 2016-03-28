@@ -22,15 +22,44 @@ type PlanarGraph =
          {vertices: Vertex list
           edges : Edge list
           lines : line list
-          polygons : Polygon list
+          wingA : Polygon list
+          wingB : Polygon list
+          wingC : Polygon list
           crossing_number: int
          }
 
-let empty_graph = {vertices = []
-                   edges = []
-                   lines = []
-                   polygons = []
-                   crossing_number = 0}
+let sort_points (l : Vertex list) =
+    let (bx,by) = List.minBy snd l
+    let (valid, invalid) = List.partition (fun (_, y) -> y <> by) l
+    let valid = valid |> List.map (fun (x,y) -> (- (x - bx) / (y - by), (x,y)))
+                      |> List.sortBy fst
+                      |> List.map snd
+    let (front, back) = List.partition (fun (x,y) -> x >= bx) invalid
+    (front @ valid @ back)
+
+let initial_graph = 
+    let v1 = (0N, 0N)
+    let v2 = (1N, 0N)
+    let v3 = (1N/2N, 1N)
+    let c = (1N/2N, 1N/3N)
+    let bottom = Option.get (Line.crossing_point (Line.construct_line v1 v2, Line.construct_line v3 c))
+    let t1 = sort_points [v1; c; bottom]
+    let t2 = sort_points [v3; c; Option.get (Line.crossing_point (Line.construct_line v1 v3, Line.construct_line v2 c))]
+    let t3 = sort_points [v2; c; bottom]
+    let edges = 
+        [0 .. (binomialCoefficient 4 2 - 1)]
+                |> List.map (choose [c; v3; v2; v1] 2)
+                |> List.map (function
+                                | [v1; v2] -> (v1, v2)
+                                | _ -> failwith "Impossible to raise this exception")
+    {vertices = [c; v3; v2; v1]
+     edges = edges
+     lines = List.map (fun (u, v) -> Line.construct_line u v) edges
+     wingA = [t1]
+     wingB = [t3]
+     wingC = [t2]
+     crossing_number = 0
+    }
 
 let polygon_to_triangle = function
     | [u; v; w] -> (u, v, w)
@@ -94,16 +123,7 @@ let center' l = l |> List.fold (fun (cx,cy) (vx,vy) -> (cx+vx, cy+vy)) (0N,0N)
                                                 |> BigRational.FromInt
                                       (cx / n, cy / n))
 
-let sort_points (l : Vertex list) =
-    let (bx,by) = List.minBy snd l
-    let (valid, invalid) = List.partition (fun (_, y) -> y <> by) l
-    let valid = valid |> List.map (fun (x,y) -> (- (x - bx) / (y - by), (x,y)))
-                      |> List.sortBy fst
-                      |> List.map snd
-    let (front, back) = List.partition (fun (x,y) -> x >= bx) invalid
-    (front @ valid @ back)
-
-let polygon_crossed (vs : Vertex list) sc lines : Polygon list =
+let polygon_crossed sc lines (vs : Polygon) : Polygon list =
     let inside (u, v) p = 
         let uv = v2d_sub u v
         let d = v2d_dot uv uv
@@ -118,11 +138,8 @@ let polygon_crossed (vs : Vertex list) sc lines : Polygon list =
                          then Some (line, uv)
                          else None
             | None -> None
-    let c = match sc with
-                | Some c -> c
-                | None -> center' vs
-    vs  |> sort_points
-        |> List.pairwise
+//    let vs = sort_points vs
+    vs  |> List.pairwise
         |> (fun l -> (List.head vs, List.last vs) :: l)
         |> List.collect (fun p -> List.choose (create p) lines)
         |> (fun l -> if List.isEmpty l
@@ -157,14 +174,34 @@ let polygon_crossed (vs : Vertex list) sc lines : Polygon list =
                                                  |> (sort_points << Set.toList << set)
                                     nt :: polygons) [])
 
-let calculate_triangles polygons lines vertices poly vertex =
+let calculate_polygons wingA wingB wingC lines vertices poly vertex =
     let new_lines =  List.map (Line.construct_line vertex) vertices
-    let polygons = List.filter (fun p' -> poly <> p') polygons
-    let polygons' =
-        polygons |> List.map (fun t -> polygon_crossed t None new_lines)
-                 |> List.fold (fun polygons ps -> ps @ polygons) []
-    let polygons'' = polygon_crossed poly (Some vertex) new_lines
-    (polygons' @ polygons'', new_lines @ lines)
+    let (wingA, fooA) = if List.exists (fun p' -> poly = p') wingA
+                        then (List.filter (fun p' -> poly <> p') wingA, true)
+                        else (wingA, false)
+    let (wingB, fooB) = if not fooA && List.exists (fun p' -> poly = p') wingB
+                        then (List.filter (fun p' -> poly <> p') wingB, true)
+                        else (wingB, false)
+    let (wingC, fooC) = if not fooA && not fooB && List.exists (fun p' -> poly = p') wingC
+                        then (List.filter (fun p' -> poly <> p') wingC, true)
+                        else (wingC, false)
+    let wingA =
+        wingA |> List.map (polygon_crossed None new_lines)
+              |> List.concat
+    let wingB =
+        wingB |> List.map (polygon_crossed None new_lines)
+              |> List.concat
+    let wingC =
+        wingC |> List.map (polygon_crossed None new_lines)
+              |> List.concat
+    let wing = polygon_crossed (Some vertex) new_lines poly
+    let (wingA, wingB, wingC) =
+        match (fooA, fooB, fooC) with
+            | (true, _, _) -> (wing @ wingA, wingB, wingC)
+            | (_, true, _) -> (wingA, wing @ wingB, wingC)
+            | (_, _, true) -> (wingA, wingB, wing @ wingC)
+            | _ -> failwith "Impossible to raise"
+    (wingA, wingB, wingC, new_lines @ lines)
 
 let crossing_number best_so_far g (vertex, poly) =
     let size = List.length g.vertices
@@ -180,34 +217,15 @@ let crossing_number best_so_far g (vertex, poly) =
     else Some (poly, g, vertex, cn)
 
 let add_vertex best_so_far (poly, g, vertex, cn) =
-    //printfn "%A" vertex
+    let n = List.length g.vertices
     if List.exists (is_collinear vertex) g.edges then None
     // base case
-    else if List.length g.vertices < 3 then
-      let vertices = vertex :: g.vertices
-      let size = List.length vertices
-      let edges = [0 .. (binomialCoefficient size 2 - 1)]
-                    |> List.map (choose vertices 2)
-                    |> List.map (function
-                                  | [v1; v2] -> (v1, v2)
-                                  | _ -> failwith "Impossible to raise this exception")
-      let triangles =
-                [0 .. (binomialCoefficient size 3 - 1)]
-                    |> List.map (List.sort << choose vertices 3)
-                    |> List.map (function
-                                  | [v1; v2; v3] -> (v1, v2, v3)
-                                  | _ -> failwith "Impossible to raise this exception")
-      {vertices = vertices;
-       edges = edges;
-       lines = List.map (fun (u, v) -> Line.construct_line u v) edges;
-       polygons = g.polygons;
-       crossing_number = g.crossing_number}
-        |> (fun g -> Some (poly, vertex, g))
+    else if n <= 3
+    then None
     // non-base case
-    else
-      let (polygons, lines) = calculate_triangles g.polygons g.lines g.vertices poly vertex
-      {vertices = vertex :: g.vertices;
-       edges = List.map (fun v -> (vertex,v)) g.vertices @ g.edges;
-       polygons = polygons; lines = lines;
-       crossing_number = g.crossing_number + cn}
-        |> (fun g -> Some (poly, vertex, g))
+    else let (wingA, wingB, wingC, lines) = calculate_polygons g.wingA g.wingB g.wingC g.lines g.vertices poly vertex
+         {vertices = vertex :: g.vertices;
+          edges = List.map (fun v -> (vertex,v)) g.vertices @ g.edges;
+          wingA = wingA; wingB = wingB; wingC = wingC; lines = lines;
+          crossing_number = g.crossing_number + cn}
+            |> (fun g -> Some (poly, vertex, g))

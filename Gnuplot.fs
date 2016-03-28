@@ -17,8 +17,9 @@ let execute_command command args =
 
 let graph_to_gnuplot file (g : PlanarGraph) =
     let vertex_set = set g.vertices
+    let polygons = g.wingA @ g.wingB @ g.wingC
     let all_vertices = 
-        g.polygons
+        polygons
             |> List.concat
             |> (Set.toList << set)
             |> List.partition (fun v -> Set.contains v vertex_set)
@@ -70,7 +71,7 @@ let graph_to_gnuplot file (g : PlanarGraph) =
         g.lines
             |> List.partition is_regular
             |> Library.pairself (List.map lines)
-    let polygons = List.map non_triangle g.polygons
+    let polygons = List.map non_triangle (g.wingA @ g.wingB @ g.wingC)
     let separated1 = vertices @ regular 
                         |> String.concat ",\\\n"
     let separated2 = if List.isEmpty irregular
@@ -104,8 +105,9 @@ let graph_to_gnuplot' debug file n =
   match Stack.get_best' n with
   | Some (g, succ) ->
     let vertex_set = set g.vertices
+    let all_polygons = g.wingA @ g.wingB @ g.wingC
     let all_vertices = 
-        g.polygons
+        all_polygons
             |> List.concat
             |> (Set.toList << set)
             |> List.partition (fun v -> Set.contains v vertex_set)
@@ -173,7 +175,7 @@ let graph_to_gnuplot' debug file n =
     let vertices' = List.map circle_to g.vertices
     let polygons =
         if debug
-        then List.map non_triangle g.polygons
+        then List.map non_triangle all_polygons
         else []
     let separated1 = vertices @ regular
                         |> String.concat ",\\\n"

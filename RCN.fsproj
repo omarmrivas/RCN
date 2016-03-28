@@ -17,7 +17,7 @@
     <ErrorReport>prompt</ErrorReport>
     <Externalconsole>true</Externalconsole>
     <PlatformTarget>x86</PlatformTarget>
-    <Commandlineparameters>-animation 10</Commandlineparameters>
+    <Commandlineparameters>-find 10 4</Commandlineparameters>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
     <DebugSymbols>false</DebugSymbols>
@@ -46,9 +46,6 @@
     <Reference Include="FSharp.PowerPack">
       <HintPath>packages\FSPowerPack.Core.Community.3.0.0.0\Lib\Net40\FSharp.PowerPack.dll</HintPath>
     </Reference>
-    <Reference Include="FSharp.PowerPack.Parallel.Seq">
-      <HintPath>packages\FSPowerPack.Parallel.Seq.Community.3.0.0.0\Lib\Net40\FSharp.PowerPack.Parallel.Seq.dll</HintPath>
-    </Reference>
     <Reference Include="FsPickler">
       <HintPath>packages\FsPickler.2.0.0\lib\net45\FsPickler.dll</HintPath>
     </Reference>
@@ -58,6 +55,9 @@
     <Reference Include="System.Data" />
     <Reference Include="FSharp.Data.SqlProvider">
       <HintPath>SQLProvider\FSharp.Data.SqlProvider.dll</HintPath>
+    </Reference>
+    <Reference Include="FSharp.Collections.ParallelSeq">
+      <HintPath>packages\FSharp.Collections.ParallelSeq.1.0.2\lib\net40\FSharp.Collections.ParallelSeq.dll</HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup>
