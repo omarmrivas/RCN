@@ -33,14 +33,14 @@ let succesor parallelism best_so_far (g : Graph.PlanarGraph) : (Graph.Vertex * G
                                          (cx / n, cy / n))
     g |> select_wing
       |> Library.tap (fun arr -> printfn "Triangles & non-triangles: %A" (List.length arr))
-(*      |> List.map (fun t -> (center t, t))
-      |> List.choose (Graph.crossing_number best_so_far g)
-      |> List.choose (Graph.add_vertex best_so_far)*)
       |> PSeq.withDegreeOfParallelism parallelism
       |> PSeq.map (fun t -> (center t, t))
       |> PSeq.choose (Graph.crossing_number best_so_far g)
-      |> PSeq.toList
-      |> List.choose (Graph.add_vertex parallelism best_so_far)
+      |> (fun pseq -> if PSeq.length pseq >= parallelism
+                      then pseq |> PSeq.choose (Graph.add_vertex None best_so_far)
+                                |> PSeq.toList
+                      else pseq |> PSeq.toList
+                                |> List.choose (Graph.add_vertex (Some parallelism) best_so_far))
       |> Library.tap (fun l -> printfn "Succesors with good crossing number: %A" (List.length l))
       |> Library.tap (fun l -> l |> List.map (fun (_, _, g) -> g.crossing_number)
                                  |> set

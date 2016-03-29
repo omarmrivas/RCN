@@ -175,7 +175,7 @@ let polygon_crossed sc lines (vs : Polygon) : Polygon list =
                                                  |> (sort_points << Set.toList << set)
                                     nt :: polygons) [])
 
-let calculate_polygons parallelism wingA wingB wingC lines vertices poly vertex =
+let parallel_calculate_polygons parallelism wingA wingB wingC lines vertices poly vertex =
     let new_lines =  List.map (Line.construct_line vertex) vertices
     let (wingA, fooA) = if List.exists (fun p' -> poly = p') wingA
                         then (List.filter (fun p' -> poly <> p') wingA, true)
@@ -210,6 +210,35 @@ let calculate_polygons parallelism wingA wingB wingC lines vertices poly vertex 
             | _ -> failwith "Impossible to raise"
     (wingA, wingB, wingC, new_lines @ lines)
 
+let calculate_polygons wingA wingB wingC lines vertices poly vertex =
+    let new_lines =  List.map (Line.construct_line vertex) vertices
+    let (wingA, fooA) = if List.exists (fun p' -> poly = p') wingA
+                        then (List.filter (fun p' -> poly <> p') wingA, true)
+                        else (wingA, false)
+    let (wingB, fooB) = if not fooA && List.exists (fun p' -> poly = p') wingB
+                        then (List.filter (fun p' -> poly <> p') wingB, true)
+                        else (wingB, false)
+    let (wingC, fooC) = if not fooA && not fooB && List.exists (fun p' -> poly = p') wingC
+                        then (List.filter (fun p' -> poly <> p') wingC, true)
+                        else (wingC, false)
+    let wingA =
+        wingA |> List.map (polygon_crossed None new_lines)
+              |> List.concat
+    let wingB =
+        wingB |> List.map (polygon_crossed None new_lines)
+              |> List.concat
+    let wingC =
+        wingC |> List.map (polygon_crossed None new_lines)
+              |> List.concat
+    let wing = polygon_crossed (Some vertex) new_lines poly
+    let (wingA, wingB, wingC) =
+        match (fooA, fooB, fooC) with
+            | (true, _, _) -> (wing @ wingA, wingB, wingC)
+            | (_, true, _) -> (wingA, wing @ wingB, wingC)
+            | (_, _, true) -> (wingA, wingB, wing @ wingC)
+            | _ -> failwith "Impossible to raise"
+    (wingA, wingB, wingC, new_lines @ lines)
+
 let crossing_number best_so_far g (vertex, poly) =
     let size = List.length g.vertices
     let cn = [0 .. (binomialCoefficient size 3 - 1)]
@@ -230,7 +259,10 @@ let add_vertex parallelism best_so_far (poly, g, vertex, cn) =
     else if n <= 3
     then None
     // non-base case
-    else let (wingA, wingB, wingC, lines) = calculate_polygons parallelism g.wingA g.wingB g.wingC g.lines g.vertices poly vertex
+    else let (wingA, wingB, wingC, lines) =
+            match parallelism with
+                | Some parallelism -> parallel_calculate_polygons parallelism g.wingA g.wingB g.wingC g.lines g.vertices poly vertex
+                | None -> calculate_polygons g.wingA g.wingB g.wingC g.lines g.vertices poly vertex
          {vertices = vertex :: g.vertices;
           edges = List.map (fun v -> (vertex,v)) g.vertices @ g.edges;
           wingA = wingA; wingB = wingB; wingC = wingC; lines = lines;
