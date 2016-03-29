@@ -5,6 +5,7 @@ open Microsoft.FSharp.Collections
 open System.Net
 open Microsoft.FSharp.Math
 open System.Text.RegularExpressions
+open FSharp.Collections.ParallelSeq
 open Line
 open Library
 open System.IO
@@ -174,7 +175,7 @@ let polygon_crossed sc lines (vs : Polygon) : Polygon list =
                                                  |> (sort_points << Set.toList << set)
                                     nt :: polygons) [])
 
-let calculate_polygons wingA wingB wingC lines vertices poly vertex =
+let calculate_polygons parallelism wingA wingB wingC lines vertices poly vertex =
     let new_lines =  List.map (Line.construct_line vertex) vertices
     let (wingA, fooA) = if List.exists (fun p' -> poly = p') wingA
                         then (List.filter (fun p' -> poly <> p') wingA, true)
@@ -186,14 +187,20 @@ let calculate_polygons wingA wingB wingC lines vertices poly vertex =
                         then (List.filter (fun p' -> poly <> p') wingC, true)
                         else (wingC, false)
     let wingA =
-        wingA |> List.map (polygon_crossed None new_lines)
-              |> List.concat
+        wingA |> PSeq.withDegreeOfParallelism parallelism
+              |> PSeq.map (polygon_crossed None new_lines)
+              |> PSeq.concat
+              |> PSeq.toList
     let wingB =
-        wingB |> List.map (polygon_crossed None new_lines)
-              |> List.concat
+        wingB |> PSeq.withDegreeOfParallelism parallelism
+              |> PSeq.map (polygon_crossed None new_lines)
+              |> PSeq.concat
+              |> PSeq.toList
     let wingC =
-        wingC |> List.map (polygon_crossed None new_lines)
-              |> List.concat
+        wingC |> PSeq.withDegreeOfParallelism parallelism
+              |> PSeq.map (polygon_crossed None new_lines)
+              |> PSeq.concat
+              |> PSeq.toList
     let wing = polygon_crossed (Some vertex) new_lines poly
     let (wingA, wingB, wingC) =
         match (fooA, fooB, fooC) with
@@ -216,14 +223,14 @@ let crossing_number best_so_far g (vertex, poly) =
     then None
     else Some (poly, g, vertex, cn)
 
-let add_vertex best_so_far (poly, g, vertex, cn) =
+let add_vertex parallelism best_so_far (poly, g, vertex, cn) =
     let n = List.length g.vertices
     if List.exists (is_collinear vertex) g.edges then None
     // base case
     else if n <= 3
     then None
     // non-base case
-    else let (wingA, wingB, wingC, lines) = calculate_polygons g.wingA g.wingB g.wingC g.lines g.vertices poly vertex
+    else let (wingA, wingB, wingC, lines) = calculate_polygons parallelism g.wingA g.wingB g.wingC g.lines g.vertices poly vertex
          {vertices = vertex :: g.vertices;
           edges = List.map (fun v -> (vertex,v)) g.vertices @ g.edges;
           wingA = wingA; wingB = wingB; wingC = wingC; lines = lines;

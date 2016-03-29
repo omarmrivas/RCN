@@ -39,8 +39,8 @@ let succesor parallelism best_so_far (g : Graph.PlanarGraph) : (Graph.Vertex * G
       |> PSeq.withDegreeOfParallelism parallelism
       |> PSeq.map (fun t -> (center t, t))
       |> PSeq.choose (Graph.crossing_number best_so_far g)
-      |> PSeq.choose (Graph.add_vertex best_so_far)
       |> PSeq.toList
+      |> List.choose (Graph.add_vertex parallelism best_so_far)
       |> Library.tap (fun l -> printfn "Succesors with good crossing number: %A" (List.length l))
       |> Library.tap (fun l -> l |> List.map (fun (_, _, g) -> g.crossing_number)
                                  |> set

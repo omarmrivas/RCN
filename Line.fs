@@ -131,7 +131,6 @@ let find_side (x, y) line =
                               else if sum.IsPositive then LEFT
                               else ANY
                                 
-
 let crossing_point = function
     | (RegularLine (m1, b1), RegularLine (m2, b2)) ->
         if m1 = m2 then None//raise (PARALLEL_LINES (RegularLine (m1, b1), RegularLine (m2, b2)))
