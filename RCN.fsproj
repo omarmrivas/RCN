@@ -17,14 +17,13 @@
     <ErrorReport>prompt</ErrorReport>
     <Externalconsole>true</Externalconsole>
     <PlatformTarget>x86</PlatformTarget>
-    <Commandlineparameters>-find 10 4</Commandlineparameters>
+    <Commandlineparameters>-find 31 24</Commandlineparameters>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
     <DebugSymbols>false</DebugSymbols>
     <Optimize>true</Optimize>
     <OutputPath>bin\Release</OutputPath>
-    <DefineConstants>
-    </DefineConstants>
+    <DefineConstants></DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <Externalconsole>true</Externalconsole>
     <GenerateTailCalls>true</GenerateTailCalls>
@@ -62,6 +61,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="Parallel.fs" />
     <Compile Include="OswinPage.fs" />
     <Compile Include="Library.fs" />
     <Compile Include="Line.fs" />

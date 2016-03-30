@@ -187,6 +187,21 @@ let parallel_calculate_polygons parallelism wingA wingB wingC lines vertices pol
                         then (List.filter (fun p' -> poly <> p') wingC, true)
                         else (wingC, false)
     let wingA =
+        wingA |> List.toArray
+              |> Array.Parallel.map (polygon_crossed None new_lines)
+              |> Array.toList
+              |> List.concat
+    let wingB =
+        wingB |> List.toArray
+              |> Array.Parallel.map (polygon_crossed None new_lines)
+              |> Array.toList
+              |> List.concat
+    let wingC =
+        wingC |> List.toArray
+              |> Array.Parallel.map (polygon_crossed None new_lines)
+              |> Array.toList
+              |> List.concat
+(*    let wingA =
         wingA |> PSeq.withDegreeOfParallelism parallelism
               |> PSeq.map (polygon_crossed None new_lines)
               |> PSeq.concat
@@ -200,7 +215,7 @@ let parallel_calculate_polygons parallelism wingA wingB wingC lines vertices pol
         wingC |> PSeq.withDegreeOfParallelism parallelism
               |> PSeq.map (polygon_crossed None new_lines)
               |> PSeq.concat
-              |> PSeq.toList
+              |> PSeq.toList*)
     let wing = polygon_crossed (Some vertex) new_lines poly
     let (wingA, wingB, wingC) =
         match (fooA, fooB, fooC) with

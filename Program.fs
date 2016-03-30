@@ -3,7 +3,7 @@
 //module RCN
 
 open Microsoft.FSharp.Math
-//open Microsoft.FSharp.Collections
+open Microsoft.FSharp.Collections
 open System.Threading.Tasks
 open FSharp.Collections.ParallelSeq
 
@@ -36,11 +36,27 @@ let succesor parallelism best_so_far (g : Graph.PlanarGraph) : (Graph.Vertex * G
       |> PSeq.withDegreeOfParallelism parallelism
       |> PSeq.map (fun t -> (center t, t))
       |> PSeq.choose (Graph.crossing_number best_so_far g)
-      |> (fun pseq -> if PSeq.length pseq >= parallelism
-                      then pseq |> PSeq.choose (Graph.add_vertex None best_so_far)
-                                |> PSeq.toList
-                      else pseq |> PSeq.toList
-                                |> List.choose (Graph.add_vertex (Some parallelism) best_so_far))
+      |> (fun pseq -> printfn "I"
+                      let graphs = PSeq.toList pseq
+                      printfn "A"
+                      let n = List.length graphs
+                      let p = n / parallelism
+                      let q = n % parallelism
+                      printfn "n=%A, p=%A, q=%A" n p q
+                      printfn "B"
+                      let l1 = if p > 0
+                               then let graphs = List.take (p * parallelism) graphs
+                                    graphs |> PSeq.withDegreeOfParallelism parallelism
+                                           |> PSeq.choose (Graph.add_vertex None best_so_far)
+                                           |> PSeq.toList
+                               else []
+                      printfn "C"
+                      let l2 = if q > 0
+                               then let graphs = List.skip (p * parallelism) graphs
+                                    List.choose (Graph.add_vertex (Some parallelism) best_so_far) graphs
+                               else []
+                      printfn "D"
+                      l1 @ l2)
       |> Library.tap (fun l -> printfn "Succesors with good crossing number: %A" (List.length l))
       |> Library.tap (fun l -> l |> List.map (fun (_, _, g) -> g.crossing_number)
                                  |> set

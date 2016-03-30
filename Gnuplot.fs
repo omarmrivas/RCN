@@ -176,7 +176,7 @@ let graph_to_gnuplot' debug file n =
     let polygons =
         if debug
         then List.map non_triangle all_polygons
-        else []
+        else polygons
     let separated1 = vertices @ regular
                         |> String.concat ",\\\n"
     let separated2 = if List.isEmpty irregular
@@ -202,6 +202,6 @@ let graph_to_gnuplot' debug file n =
 
 let graph_to_animation file n =
 //    execute_command "rm" (file + "*.*")
-    List.iter (fun n -> graph_to_gnuplot' false (file + (sprintf "%02d" n)) (uint32 n)) [3..n]
+    List.iter (fun n -> graph_to_gnuplot' false (file + (sprintf "%02d" n)) (uint32 n)) [4..n]
     execute_command "convert" ("-size 500x500 -density 500 -quality 100 -set delay 100 -colorspace GRAY -colors 256 -dispose 2 -loop 0 -scale 300% *.eps " + file + ".gif")
       
